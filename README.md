@@ -81,7 +81,7 @@ npm install
 #### Create Database Schema
 1. In Supabase Dashboard, go to **SQL Editor**
 2. Click **+ New query**
-3. Copy contents of `../code/supabase-schema.sql` (from project root)
+3. Copy contents of `./supabase-schema.sql` (from project root)
 4. Paste and click **Run**
 5. Verify "Success. No rows returned"
 
