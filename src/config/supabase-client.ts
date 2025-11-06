@@ -1,8 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
-import { config } from 'dotenv'
 
-config()
-
+// Next.js automatically loads .env files - no need for dotenv.config()
+// This also makes the code compatible with Edge Runtime (used in middleware)
 const SUPABASE_URL = process.env.SUPABASE_URL
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY
 

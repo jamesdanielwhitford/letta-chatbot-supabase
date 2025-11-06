@@ -1,8 +1,7 @@
 import { createLetta } from '@letta-ai/vercel-ai-sdk-provider'
-import { config } from 'dotenv'
 
-config()
-
+// Next.js automatically loads .env files - no need for dotenv.config()
+// This also makes the code compatible with Edge Runtime (used in middleware)
 const LETTA_API_KEY = process.env.LETTA_API_KEY || 'DEFAULT_TOKEN'
 const LETTA_BASE_URL = process.env.LETTA_BASE_URL || 'http://localhost:8283'
 
