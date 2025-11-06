@@ -8,6 +8,7 @@ import {
   createLetta
 } from '@letta-ai/vercel-ai-sdk-provider'
 import { streamText, convertToModelMessages } from 'ai'
+import { getAgentByLettaId, createMessages } from '@/services/supabase-service'
 
 async function getAgentMessages(
   req: NextRequest,
@@ -52,6 +53,12 @@ async function sendMessage(
 
   const { messages } = await req.json()
 
+  // Get Supabase agent to store messages
+  const supabaseAgent = await getAgentByLettaId(agentId)
+  if (!supabaseAgent) {
+    console.warn(`Agent ${agentId} not found in Supabase, skipping message persistence`)
+  }
+
   const result = streamText({
     model: letta(),
     providerOptions: {
@@ -59,7 +66,48 @@ async function sendMessage(
         id: agentId
       }
     },
-    messages: convertToModelMessages(messages)
+    messages: convertToModelMessages(messages),
+    async onFinish({ text }) {
+      // Persist messages to Supabase after streaming completes
+      if (supabaseAgent) {
+        try {
+          const userMessage = messages[messages.length - 1]
+
+          // Extract content from message structure
+          // Vercel AI SDK messages have a parts array with text content
+          let userContent = ''
+          if (typeof userMessage === 'string') {
+            userContent = userMessage
+          } else if (userMessage.content) {
+            userContent = userMessage.content
+          } else if (userMessage.parts && Array.isArray(userMessage.parts)) {
+            // Extract text from parts array
+            userContent = userMessage.parts
+              .filter((part: any) => part.type === 'text')
+              .map((part: any) => part.text)
+              .join('')
+          }
+
+          await createMessages([
+            {
+              agentId: supabaseAgent.id,
+              role: 'user',
+              content: userContent
+            },
+            {
+              agentId: supabaseAgent.id,
+              role: 'assistant',
+              content: text
+            }
+          ])
+
+          console.log(`Persisted conversation to Supabase for agent ${agentId}`)
+        } catch (error) {
+          console.error('Failed to persist messages to Supabase:', error)
+          // Don't fail the request, just log the error
+        }
+      }
+    }
   })
 
   return result.toUIMessageStreamResponse()
