@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import client from '@/config/letta-client'
 import { validateAgentOwner } from '../helpers'
 import { Context } from '@/types'
+import * as supabaseService from '@/services/supabase-service'
 
 async function getAgentById(
   req: NextRequest,
@@ -57,7 +58,14 @@ async function deleteAgentById(
   const { agentId } = result
 
   try {
+    // Step 1: Delete from Letta
     await client.agents.delete(agentId)
+
+    // Step 2: Delete metadata from Supabase (cascades to messages)
+    await supabaseService.deleteAgentMetadata(agentId)
+
+    console.log(`Agent deleted: Letta ID ${agentId} and Supabase metadata`)
+
     return NextResponse.json({ message: 'Agent deleted successfully' })
   } catch (error) {
     console.error('Error deleting agent:', error)
