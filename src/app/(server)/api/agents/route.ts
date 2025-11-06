@@ -1,24 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server'
 import client from '@/config/letta-client'
 import defaultAgent from '@/default-agent'
-import { getUserTagId, getUserId } from './helpers'
+import { getUserFromRequest } from './helpers'
+import * as supabaseService from '@/services/supabase-service'
 
 async function getAgents(req: NextRequest) {
-  const userId = getUserId(req)
-  if (!userId) {
-    return NextResponse.json({ error: 'User ID is required' }, { status: 400 })
+  const user = getUserFromRequest(req)
+  if (!user) {
+    return NextResponse.json({ error: 'User authentication required' }, { status: 401 })
   }
 
   try {
+    // Fetch agents from Letta using Identity
     const agents = await client.agents.list({
-      tags: getUserTagId(userId),
-      matchAllTags: true,
+      identifierKeys: [user.cookieUid]
     })
+
     const sortedAgents = agents.sort((a, b) => {
       const dateA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0
       const dateB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0
       return dateB - dateA
     })
+
     return NextResponse.json(sortedAgents)
   } catch (error) {
     console.error('Error fetching agents:', error)
@@ -35,18 +38,35 @@ async function createAgent(req: NextRequest) {
   const DEFAULT_LLM = defaultAgent.DEFAULT_LLM
   const DEFAULT_EMBEDDING = defaultAgent.DEFAULT_EMBEDDING
 
-  const userId = getUserId(req)
-  if (!userId) {
-    return NextResponse.json({ error: 'User ID is required' }, { status: 400 })
+  const user = getUserFromRequest(req)
+  if (!user) {
+    return NextResponse.json({ error: 'User authentication required' }, { status: 401 })
   }
 
   try {
+    // Step 1: Create agent in Letta with Identity
     const newAgent = await client.agents.create({
       memoryBlocks: DEFAULT_MEMORY_BLOCKS,
       model: DEFAULT_LLM,
       embedding: DEFAULT_EMBEDDING,
-      tags: getUserTagId(userId)
+      identityIds: [user.lettaIdentityId]
     })
+
+    // Step 2: Store agent metadata in Supabase
+    // Extract persona and human block from memory blocks
+    const personaBlock = DEFAULT_MEMORY_BLOCKS.find(b => b.label === 'persona')
+    const humanBlock = DEFAULT_MEMORY_BLOCKS.find(b => b.label === 'human')
+
+    await supabaseService.createAgentMetadata({
+      lettaAgentId: newAgent.id,
+      userId: user.supabaseUserId,
+      name: newAgent.name || 'New Agent',
+      persona: personaBlock?.value,
+      humanBlock: humanBlock?.value,
+      model: DEFAULT_LLM
+    })
+
+    console.log(`Agent created: Letta ID ${newAgent.id}, Supabase metadata stored`)
 
     return NextResponse.json(newAgent)
   } catch (error) {
